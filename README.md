@@ -75,20 +75,16 @@ This produces the updater GUI, backend, and setup utility in the build directory
 
 ## Building AppImages
 
-Place `linuxdeploy-x86_64.AppImage` and `linuxdeploy-plugin-qt-x86_64.AppImage` in `linux-updater-app/`, then make them executable. After the normal CMake build, create the updater AppImage directly in the Git-ignored input directory:
+Run this single command from the project root:
 
-    chmod +x linux-updater-app/linuxdeploy-x86_64.AppImage \
-      linux-updater-app/linuxdeploy-plugin-qt-x86_64.AppImage
-    mkdir -p input-release
-    ./linux-updater-app/package-appimage.sh \
-      linux-updater-app/build input-release
+    ./build-appimages.sh
 
-Keep exactly one updater AppImage in `input-release/`. Build the setup AppImage around it with:
+It configures and compiles the project, builds the updater AppImage, and embeds that exact updater into the setup AppImage. The results are:
 
-    ./linux-updater-app/package-setup-utility.sh \
-      linux-updater-app/build
+    input-release/Linux_Update_Utility-x86_64.AppImage
+    linux-updater-app/release/LUU_Setup_Utility-x86_64.AppImage
 
-The setup packager accepts any `.AppImage` filename in `input-release/` and embeds it under the canonical payload name. Its output is `linux-updater-app/release/LUU_Setup_Utility-x86_64.AppImage`. Pass an explicit updater path as the second argument if the input directory contains multiple AppImages.
+On its first run, the script downloads the official linuxdeploy and Qt-plugin AppImages from their continuous GitHub releases. It safely builds in temporary directories before replacing those two generated outputs. For a custom prebuilt updater instead, put exactly one `.AppImage` in the Git-ignored `input-release/` directory and run `./linux-updater-app/package-setup-utility.sh linux-updater-app/build`.
 
 ## Maintenance principles
 

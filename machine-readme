@@ -265,6 +265,24 @@ choice, not a build failure.
 
 ## Packaging and release
 
+### One-command release build
+
+Run this from the project root:
+
+    ./build-appimages.sh
+
+This configures and compiles all targets, packages the updater in a temporary
+directory, embeds that exact updater into the setup utility, and then writes
+the two completed artifacts to input-release/ and linux-updater-app/release/.
+Existing generated artifacts at those two canonical output paths are replaced
+only after both packaging stages succeed. The script automatically uses the
+known Arch-family linuxdeploy compatibility settings when needed. On first
+use, it downloads the official linuxdeploy and Qt-plugin AppImages from their
+continuous GitHub releases.
+
+The lower-level procedures below remain available for custom payloads and
+packaging diagnostics.
+
 ### Build the updater AppImage
 
 package-appimage.sh is the reproducible updater-packaging path. It makes a temporary AppDir, runs linuxdeploy plus its Qt plugin, explicitly includes the Qt XCB and Wayland support libraries, verifies expected paths, and emits an AppImage. It deliberately avoids copying broad unrelated desktop plugins.
