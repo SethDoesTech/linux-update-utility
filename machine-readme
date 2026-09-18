@@ -46,6 +46,8 @@ The current CMake development builds include:
 * Seth Langer creator credit in the footer;
 * a small white circular information button with a three-line notice;
 * the complete GPLv3 in the root LICENSE file;
+* a Settings menu that can uninstall the system-wide application while preserving user-local data;
+* persistent Light, Dark, Green Phosphor, Amber CRT, and Classic Blue choices in the Settings > Theme menu;
 * Update Existing Install in the setup utility;
 * safer AppImage replacement: write a complete .new file, then rename it over the old AppImage.
 
@@ -107,6 +109,23 @@ The script is human-readable by design. Never write it inside a read-only AppIma
         /usr/share/icons/hicolor/scalable/apps/linux-update-utility.svg
 
 6. When the updater already exists, Update Existing Install writes a complete .new AppImage then renames it into place. It refreshes the launcher/icon without intentionally deleting user-local application data.
+
+### Uninstall flow
+
+1. The user selects Uninstall Linux Update Utility from the Settings menu.
+2. The main window confirms the scope and requests administrator authorization.
+3. The application removes only the installed AppImage, desktop entry, and icon created by the setup utility.
+4. User-local application data, including generated scripts, remains in place.
+5. After a successful uninstall, the running application displays confirmation and closes.
+
+### Appearance settings
+
+The Settings > Theme menu provides mutually exclusive Light, Dark, Green
+Phosphor, Amber CRT, and Classic Blue choices. The three latter choices use
+high-contrast palettes inspired by classic computer terminals.
+The selected theme applies to the full Qt application, including menus and
+dialogs, and is saved with QSettings for the next launch. Light is the default
+when no preference has been saved.
 
 Do not use /bin as the install destination. A minimal Ubuntu VM showed that /bin can be absent or system-managed; creating it incorrectly can break the expected /bin/sh path.
 

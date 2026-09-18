@@ -7,6 +7,8 @@
 class QPushButton;
 class QProcess;
 class QPlainTextEdit;
+class QAction;
+class QLabel;
 
 class MainWindow : public QMainWindow
 {
@@ -24,6 +26,9 @@ private:
     void appendTerminalOutput();
 
     void showSystemInfo();
+    void uninstallApplication();
+    void applyTheme(const QString &themeName);
+    void loadTheme();
 
     bool scriptRequiresSudo() const;
     bool requestSudoPassword();
@@ -34,6 +39,13 @@ private:
     QPushButton *generateButton;
     QPushButton *updateButton;
     QPushButton *systemInfoButton;
+    QAction *uninstallAction;
+    QAction *lightThemeAction;
+    QAction *darkThemeAction;
+    QAction *greenThemeAction;
+    QAction *amberThemeAction;
+    QAction *blueThemeAction;
+    QLabel *creditLabel;
 
     QPlainTextEdit *terminalOutput;
 

@@ -43,6 +43,8 @@ The distributed LUU Setup Utility AppImage contains a tested updater AppImage. I
 
 The installed AppImage is stored in /usr/local/bin. The application continues to use the host's existing package managers and repositories.
 
+The application's Settings menu provides persistent Light, Dark, Green Phosphor, Amber CRT, and Classic Blue themes. It can also uninstall the system-wide installation. Uninstalling removes the installed AppImage, application-menu entry, and icon while preserving user-local application data.
+
 ## Source layout
 
 | Path | Purpose |
