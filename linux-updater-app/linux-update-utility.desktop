@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Linux Update Utility
+Comment=Update your Linux system through a graphical interface
+Exec=linux-updater-app
+Icon=linux-update-utility
+Terminal=false
+Categories=System;Settings;
+StartupNotify=true
+StartupWMClass=linux-update-utility

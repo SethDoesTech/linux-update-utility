@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=LUU Setup Utility
+Comment=Install Linux Update Utility
+Exec=luu-setup-utility
+Icon=luu-icon
+Terminal=false
+Categories=System;Settings;
+StartupNotify=true

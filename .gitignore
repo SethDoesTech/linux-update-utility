@@ -1,0 +1,15 @@
+# Local build output and generated runtime state.
+/linux-update-utility
+/scripts/update-script-output.sh
+/linux-updater-app/build/
+/linux-updater-app/AppDir/
+/linux-updater-app/release/
+
+# Downloaded packaging tools and locally produced artifacts.
+/linux-updater-app/*.AppImage
+/release-input/*.AppImage
+
+# Editor and CMake user-local files.
+*.user
+*.user.*
+CMakeUserPresets.json

@@ -1,0 +1,421 @@
+# Linux Update Utility — Machine Readme
+
+README.md is the short public guide. This machine-readme is the complete
+technical, maintainer, and release-maintenance reference for Linux Update
+Utility. It is intentionally more detailed than README.md and should stay in
+sync whenever architecture, packaging, or supported behavior changes.
+
+Last reviewed against the working tree: September 2026.
+
+## Purpose
+
+Linux Update Utility is a Linux-only Qt 6 desktop front end for the update commands already supplied by a host operating system. It does not replace a package manager. It detects installed package-manager executables, creates a readable shell script using their normal commands, and lets the GUI run that script.
+
+| Package manager | Generated command | Privilege model |
+| --- | --- | --- |
+| pacman | pacman -Syu --noconfirm | One sudo group |
+| apt | apt update && apt upgrade -y | One sudo group |
+| dnf | dnf upgrade -y | One sudo group |
+| snap | snap refresh | One sudo group |
+| flatpak | flatpak update -y | Normal user |
+
+Keep the project small, Linux-native, and transparent. Do not add a service, daemon, or abstraction layer merely to duplicate work that bash, sudo, and the host package manager already do.
+
+### Functional boundaries
+
+The project does not manage repositories, install development dependencies,
+replace a distribution's update policy, or promise to make every package
+manager safe in every configuration. It coordinates the host tools it finds.
+That means package-manager output, prompts, failures, and repository policy
+remain properties of the host system.
+
+The updater has three distinct responsibilities that should remain separate:
+
+| Layer | Responsibility | Must not do |
+| --- | --- | --- |
+| Qt GUI | User interaction, password prompt, process output, system information | Generate package-manager shell fragments. |
+| C++ backend | Detect results, explicit command selection, update-script generation | Render GUI or install files system-wide. |
+| bash / host tools | Executable detection, generated script execution, package updates | Carry application state or embed GUI logic. |
+
+## Current status and release rule
+
+The updater and separate setup utility have worked in Ubuntu and Fedora VM testing. The setup utility creates a normal application-menu entry, installs the updater to /usr/local/bin, and can update an existing install.
+
+The current CMake development builds include:
+
+* Seth Langer creator credit in the footer;
+* a small white circular information button with a three-line notice;
+* the complete GPLv3 in the root LICENSE file;
+* Update Existing Install in the setup utility;
+* safer AppImage replacement: write a complete .new file, then rename it over the old AppImage.
+
+### Critical: the embedded payload is separate
+
+package-setup-utility.sh copies release-input/Linux_Update_Utility-x86_64.AppImage into the setup AppImage unchanged. It never rebuilds or inspects that file.
+
+The current local payload was replaced on September 2, 2026 with a newer
+known-good updater AppImage (SHA-256
+`37ec707f5ea6485f92161e16a02141ded0a670d8aaf3d89b14ee5667e5c72964`). It
+contains the current footer and compact legal-notice UI. A setup AppImage was
+successfully packaged around it on the Arch desktop and used there to update
+an existing installation successfully.
+
+This is useful validation, not a compatibility sign-off. The newly packaged
+setup AppImage still needs a clean test on the intended Ubuntu 24.04 laptop
+and other target systems. The laptop reported a CPU ISA compatibility problem,
+and an Ubuntu 26.04 live environment was not usable for follow-up testing.
+Record the exact error before changing compiler flags or broadening bundled
+libraries.
+
+Do not distribute a setup AppImage until its setup executable and embedded updater payload come from the intended release revision and have been tested together.
+
+## Architecture
+
+    MainWindow Qt GUI
+            |
+            +-- runs linux-update-utility (C++ backend)
+            |      +-- runs scripts/detect-package-managers.sh
+            |            +-- command -v pacman / flatpak / apt / dnf / snap
+            |
+            +-- backend creates a readable update shell script in the user's
+            |   Qt application-data directory
+            |
+            +-- GUI runs that script with bash, supplies one password over
+                stdin only if sudo -S is present, and streams output to the UI
+
+### Updater runtime flow
+
+1. The user selects Generate Script or Update System.
+2. MainWindow starts the C++ backend beside the GUI executable with the application root as its working directory.
+3. The GUI passes a writable output path through LINUX_UPDATE_SCRIPT_OUTPUT. It comes from QStandardPaths::AppLocalDataLocation.
+4. The backend invokes bash ./scripts/detect-package-managers.sh and writes the script for the package managers it finds.
+5. Generate Script reports success. Update System regenerates the script, prompts for a password only if sudo -S is present, then runs bash followed by the generated-script path.
+6. The GUI streams merged standard output/error into a QPlainTextEdit. It clears the in-memory password after writing it to the child process.
+
+The script is human-readable by design. Never write it inside a read-only AppImage filesystem.
+
+### Setup utility runtime flow
+
+1. setup-main.cpp creates SetupWindow.
+2. A packaged setup AppImage uses its embedded payload at usr/share/linux-update-utility/payload/Linux_Update_Utility-x86_64.AppImage. A development setup executable may use an AppImage beside itself.
+3. SetupWindow stages the payload in a user-writable temporary file, so root does not need to access a FUSE-mounted AppImage.
+4. It creates temporary icon/desktop files, requests the password once, and runs a small sudo -S bash installation command.
+5. It installs these files:
+
+        /usr/local/bin/linux-update-utility.AppImage
+        /usr/share/applications/linux-update-utility.desktop
+        /usr/share/icons/hicolor/scalable/apps/linux-update-utility.svg
+
+6. When the updater already exists, Update Existing Install writes a complete .new AppImage then renames it into place. It refreshes the launcher/icon without intentionally deleting user-local application data.
+
+Do not use /bin as the install destination. A minimal Ubuntu VM showed that /bin can be absent or system-managed; creating it incorrectly can break the expected /bin/sh path.
+
+### CMake targets and packaged layout
+
+CMake builds three independent executables into the selected build directory:
+
+| Target | Role |
+| --- | --- |
+| linux-update-utility | Command-generation backend. |
+| linux-updater-app | Main end-user updater GUI. |
+| luu-setup-utility | Separate installer/updater GUI. |
+
+The updater AppImage layout installed by CMake contains the main GUI and
+backend under usr/bin, the detection helper under scripts, the desktop file
+under usr/share/applications, and the SVG icon under the hicolor icon path.
+MainWindow depends on that relationship: it starts the backend beside itself
+and gives it the application root as the working directory so the relative
+scripts/detect-package-managers.sh path remains valid.
+
+This relative-path relationship is intentional but packaging-sensitive. Any
+future change to the AppDir layout must be tested by generating a script from
+the packaged updater, not just from a development build.
+
+## File-by-file map
+
+| Path | Responsibility |
+| --- | --- |
+| README.md | Short public architecture, build, maintenance, and release guide. |
+| machine-readme | This detailed technical and maintainer reference. |
+| LICENSE | Complete GNU GPL version 3. Keep the text unmodified. |
+| NOTICE | Project copyright and licensing notice. |
+| .gitignore | Excludes build output, downloaded tools, and local release files from a future public repository. |
+| src/backend/linux-update-utility.cpp | C++ backend: detection result handling and update-script generation. |
+| scripts/detect-package-managers.sh | Detection helper using command -v. |
+| scripts/update-script-output.sh | Generated/development fallback output when LINUX_UPDATE_SCRIPT_OUTPUT is absent; not canonical source. |
+| linux-updater-app/CMakeLists.txt | Defines the backend, GUI, and setup targets; generic x86-64 flags; updater AppDir install layout. |
+| linux-updater-app/main.cpp | Main updater GUI entry point and application metadata. |
+| linux-updater-app/MainWindow.hpp/.cpp | Updater UI, generation, update process, password prompt, output window, system-info dialog, footer. |
+| linux-updater-app/setup-main.cpp | Setup utility entry point. |
+| linux-updater-app/SetupWindow.hpp/.cpp | Setup/update UI, payload staging, authorization, installation, and existing-install replacement. |
+| linux-updater-app/LegalNotices.hpp/.cpp | Shared three-line copyright/GPL information dialog. |
+| linux-updater-app/resources.qrc | Main GUI icon plus embedded LICENSE/NOTICE resources. |
+| linux-updater-app/setup-resources.qrc | Setup GUI icon plus embedded LICENSE/NOTICE resources. |
+| linux-updater-app/luu-icon.svg | Shared scalable application icon. |
+| linux-updater-app/linux-update-utility.desktop | Desktop metadata for the updater AppImage. |
+| linux-updater-app/luu-setup-utility.desktop | Desktop metadata for the setup AppImage. |
+| linux-updater-app/package-appimage.sh | Builds an updater AppImage and explicitly bundles required Qt XCB/Wayland support. |
+| linux-updater-app/package-setup-utility.sh | Builds a setup AppImage around an unchanged supplied updater payload. |
+| release-input/Linux_Update_Utility-x86_64.AppImage | Local release input; do not commit it to public source. |
+
+## Legal and credit behavior
+
+Both GUIs show this footer layout:
+
+    (i) Created by Seth Langer
+
+The small information button deliberately opens only this short notice:
+
+    Copyright © 2026 Seth Langer
+    Licensed under GNU GPLv3
+    Linux Update Utility
+
+The complete GPLv3 is in the root LICENSE file. NOTICE contains the longer project notice supplied by the maintainer. Keep both with source releases and any other release materials required by the project policy.
+
+The two .qrc files also compile LICENSE and NOTICE into the executables, but LegalNotices.cpp intentionally displays hard-coded short text instead of reading the resources. This keeps the dialog small; see the decision item in the audit section before changing it.
+
+## Tools and build environment
+
+### Official baseline
+
+Build official x86_64 artifacts on Ubuntu 24.04 LTS using its distro Qt
+packages and a generic x86-64 compiler baseline.
+
+    -march=x86-64
+    -mtune=generic
+
+Never substitute -march=native, x86-64-v3, AVX2, AVX-512, or other CPU-specific release flags. Do not package an official release with runtime libraries copied from an unrelated development environment.
+
+### Ubuntu development and packaging tools
+
+    sudo apt update
+    sudo apt install -y \
+      build-essential cmake \
+      qt6-base-dev qt6-base-dev-tools qt6-wayland \
+      patchelf desktop-file-utils squashfs-tools \
+      fuse3 libfuse2t64 file curl wget
+
+| Tool | Purpose |
+| --- | --- |
+| GCC / g++, C++17 | Compile backend and Qt applications. |
+| CMake | Configure and build project targets. |
+| Qt 6 Widgets | GUI framework. |
+| qmake6 | Found by the packaging scripts so linuxdeploy's Qt plugin can locate Qt paths. |
+| bash | Detection and packaging scripts; generated update script. |
+| linuxdeploy and its Qt plugin | Build portable AppImages; downloaded packaging tools, not runtime dependencies. |
+| patchelf, desktop-file-utils, squashfs-tools | AppImage packaging/inspection support. |
+| fuse3, libfuse2t64 | Normal AppImage mounting on compatible Ubuntu systems. |
+| file, sha256sum, strace | Optional artifact and failure diagnostics. |
+| fish | Optional maintainer shell preference, never a runtime dependency. |
+
+The linuxdeploy AppImages may stay beside the package scripts locally, or their paths can be passed through LINUXDEPLOY and LINUXDEPLOY_PLUGIN_QT. Download them from their upstream project and record relevant versions/checksums in release notes.
+
+### Development build
+
+From the project root:
+
+    cmake -S linux-updater-app -B linux-updater-app/build
+    cmake --build linux-updater-app/build -j2
+
+Run the two development windows:
+
+    ./linux-updater-app/build/linux-updater-app
+    ./linux-updater-app/build/luu-setup-utility
+
+A development setup executable expects an updater AppImage beside itself. A packaged setup AppImage uses its embedded payload.
+
+### Build verification
+
+Before packaging, verify that the expected binaries exist and that the package
+scripts parse:
+
+    cmake --build linux-updater-app/build --target \
+      linux-update-utility linux-updater-app luu-setup-utility -j2
+    bash -n linux-updater-app/package-appimage.sh \
+      linux-updater-app/package-setup-utility.sh
+
+The desktop files can be checked when desktop-file-validate is available:
+
+    desktop-file-validate \
+      linux-updater-app/linux-update-utility.desktop \
+      linux-updater-app/luu-setup-utility.desktop
+
+The current category value is accepted with a hint that using both System and
+Settings may cause duplicate menu placement. That is a desktop-integration
+choice, not a build failure.
+
+## Packaging and release
+
+### Build the updater AppImage
+
+package-appimage.sh is the reproducible updater-packaging path. It makes a temporary AppDir, runs linuxdeploy plus its Qt plugin, explicitly includes the Qt XCB and Wayland support libraries, verifies expected paths, and emits an AppImage. It deliberately avoids copying broad unrelated desktop plugins.
+
+    cd linux-updater-app
+    ./package-appimage.sh build
+
+The script refuses to overwrite an existing output. Archive or rename an older artifact before producing another.
+
+### Build the one-file setup AppImage
+
+1. Create the local input directory, then put the exact tested updater at:
+
+        mkdir -p release-input
+        release-input/Linux_Update_Utility-x86_64.AppImage
+
+2. Record its hash if appropriate:
+
+        sha256sum release-input/Linux_Update_Utility-x86_64.AppImage
+
+3. Package the setup utility:
+
+        cd linux-updater-app
+        ./package-setup-utility.sh build
+
+On the current Arch development machine, the Qt deployment plugin's bundled
+`strip` is older than Arch's RELR-enabled libraries. For a local packaging
+build there, use:
+
+        NO_STRIP=1 APPIMAGE_EXTRACT_AND_RUN=1 \
+          ./package-setup-utility.sh build \
+          ../release-input/Linux_Update_Utility-x86_64.AppImage release
+
+`NO_STRIP=1` skips only optional size-reduction stripping. It does not alter
+the compiled setup executable or the embedded updater payload. This is an
+Arch/linuxdeploy compatibility workaround, not the preferred clean-Ubuntu
+release procedure.
+
+4. Expected output:
+
+        linux-updater-app/release/LUU_Setup_Utility-x86_64.AppImage
+
+The setup packager does not rebuild, validate, or alter the payload. It distributes one installer AppImage containing one known-good updater AppImage.
+
+### Minimum pre-release test matrix
+
+Test the exact setup AppImage intended for users, never a separately rebuilt substitute:
+
+1. Ubuntu: setup launches; first install works; launcher/icon appear; updater launches and reopens.
+2. Ubuntu: rerun setup; Update Existing Install works; launcher, icon, and launch behavior remain correct.
+3. Fedora: first-install and existing-install update checks.
+4. Arch/CachyOS: first-install and existing-install update checks on a safe system.
+5. Updater: Generate Script, Update System, System Info, detection, and output display.
+6. AppImage fallback: record FUSE requirements or APPIMAGE_EXTRACT_AND_RUN=1 behavior without treating a broken VM setup as an application bug.
+
+Never ask testers to share passwords or logs containing private repository URLs, package names, or other sensitive data.
+
+### Failure classification
+
+Use the failure location to decide where to investigate. Do not add unrelated
+runtime dependencies before identifying the layer involved.
+
+| Symptom | Likely layer | First checks |
+| --- | --- | --- |
+| GUI cannot find backend or detection helper | Packaged layout / resource paths | Verify AppDir usr/bin and scripts layout; run Generate Script. |
+| Shell reports /bin/sh missing | Broken host system layout | Repair the host VM; do not change the application path back to /bin. |
+| AppImage fails to mount | Host FUSE configuration | Check FUSE; use extraction fallback only for diagnosis. |
+| Qt says XCB or Wayland plugin cannot load | AppImage runtime bundle | Inspect the AppDir and package the missing Qt support-library closure. |
+| Launcher has no icon or does not appear | Desktop entry/icon install | Validate desktop entry, paths, permissions, and desktop cache behavior. |
+| Setup image installs an older app | Release payload discipline | Replace release-input payload with the exact newly tested updater AppImage. |
+| Packaging fails while stripping RELR libraries on Arch | linuxdeploy tool age versus Arch libraries | Use `NO_STRIP=1`; do not mistake it for a missing application dependency. |
+| Setup AppImage fails with an ISA/CPU requirement on another computer | Build-host library baseline / compatibility | Capture the exact loader error; validate on the intended Ubuntu 24.04 release machine before release. |
+| Update command fails | Host package manager or generated command | Inspect generated script and GUI output before changing GUI code. |
+
+## Example maintenance changes
+
+### Add a package manager
+
+1. Add a command -v line in scripts/detect-package-managers.sh.
+2. Add an explicit generation branch in src/backend/linux-update-utility.cpp.
+3. Decide whether it needs sudo or runs as the normal user.
+4. Document the exact command in README.md and this file.
+5. Inspect the generated script and test it on a disposable system of that distribution.
+
+Do not infer arbitrary shell commands from paths or add vague generic shell logic.
+
+### Add a GUI feature
+
+Put buttons, dialogs, and process presentation in MainWindow.cpp, with state declarations in MainWindow.hpp. Keep command generation in the backend. For a new system-info field, extend MainWindow::showSystemInfo() only.
+
+### Change an update command
+
+Edit the corresponding backend branch in src/backend/linux-update-utility.cpp, rebuild, use Generate Script to inspect the output, and test the command in a disposable VM. Package-manager commands are security-sensitive because they may run with administrator privileges.
+
+### Change installer behavior
+
+Update the path constants and installation command in SetupWindow.cpp. Retest first install, Update Existing Install, launcher/icon behavior, automatic launch, and reopen behavior. Preserve stage-then-rename when replacing the AppImage.
+
+### Change branding or legal text
+
+* Change footer text in MainWindow.cpp and SetupWindow.cpp.
+* Change the compact dialog text in LegalNotices.cpp.
+* Change LICENSE or NOTICE for source/release materials.
+* Rebuild executable targets and regenerate release AppImages.
+
+### Change AppImage runtime contents
+
+Make packaging-only changes in package-appimage.sh or package-setup-utility.sh, not backend changes. Test the exact output on a clean Ubuntu VM. Do not copy broad host plugins/libraries merely to make one desktop launch.
+
+## Security and correctness rules
+
+* Never log, print, persist, or pass administrator passwords through command arguments. The current design writes them once to sudo -S standard input.
+* Preserve one sudo invocation for privileged package-manager operations.
+* Keep Flatpak outside that privileged group unless a deliberate, tested change requires otherwise.
+* Keep generated scripts in writable user application data, never in an AppImage.
+* Treat package-manager commands, authentication, generated-script paths, and installer paths as security-sensitive.
+* Do not silently install packages, change repositories, or add a background service.
+* Do not claim universal Linux support. State tested distributions and known requirements honestly.
+
+## Audit: source-release cleanup decisions
+
+No files were removed during this audit.
+
+### Keep as project source/documentation
+
+Keep README.md, machine-readme, LICENSE, NOTICE, C++ source, detection script, CMake file, desktop files, icon, and packaging scripts.
+
+package-appimage.sh and linux-update-utility.desktop support a reproducible updater-AppImage path. They are not required merely to wrap a prebuilt payload, but they should remain if the project wants to be able to produce its updater AppImage from source.
+
+### Generated/local-only: exclude from a public source archive or repository
+
+| Path | Why it is excluded |
+| --- | --- |
+| linux-updater-app/build/ | Reproducible CMake/Qt build output. |
+| linux-updater-app/AppDir/ | Old manual staging bundle; current scripts create temporary AppDirs. |
+| linux-update-utility | Local compiled backend binary; CMake rebuilds it under linux-updater-app/build/. |
+| scripts/update-script-output.sh | Generated fallback script containing stale generated commands. |
+| linux-updater-app/Linux_Update_Utility-x86_64.AppImage | Older manual AppImage; differs from the intended local payload and is not read by the setup packager. |
+| linux-updater-app/linuxdeploy-x86_64.AppImage | Downloaded packaging tool, not source/runtime content. |
+| linux-updater-app/linuxdeploy-plugin-qt-x86_64.AppImage | Downloaded packaging tool, not source/runtime content. |
+| release-input/Linux_Update_Utility-x86_64.AppImage | Necessary local release input but not public source. |
+| Empty workspace directories such as .git, .agents, .codex | Environment/workspace state, not project source. |
+
+.gitignore now excludes these paths without deleting anything locally.
+
+### Optional desktop-category cleanup
+
+Both desktop files currently use:
+
+    Categories=System;Settings;
+
+desktop-file-validate accepts this but warns that the two main categories may
+make the application appear more than once in some menus. Pick one main
+category later if duplicate menu placement is observed. No change was made
+during this audit.
+
+### Optional legal-resource cleanup
+
+resources.qrc and setup-resources.qrc embed LICENSE and NOTICE, but no current C++ code reads :/LICENSE or :/NOTICE. Keeping them compiles legal text into both executables; removing them reduces duplication and avoids implying that the small dialog reads those files.
+
+Either choice is safe for the current UI. Decide later whether full legal text should be invisibly embedded or only shipped as accessible files with source/release materials.
+
+
+## Final release checklist
+
+1. Review LICENSE, NOTICE, source, and README.md.
+2. Build the updater from the intended release revision on Ubuntu 24.04 with generic x86-64 flags.
+3. Test the updater AppImage and record its hash.
+4. Replace release-input/Linux_Update_Utility-x86_64.AppImage with that exact tested artifact.
+5. Rebuild the setup utility and package the one-file setup AppImage.
+6. Test that exact setup AppImage on Ubuntu, Fedora, and Arch/CachyOS, including first install and Update Existing Install.
+7. Confirm the packaged updater contains the intended legal/footer UI, then test generation, update, system info, launch, and reopen.
+8. Publish only the exact tested setup AppImage plus source that excludes generated/local-only files and includes README.md, LICENSE, NOTICE, and build instructions.

@@ -1,0 +1,7 @@
+<RCC>
+    <qresource prefix="/">
+        <file>luu-icon.svg</file>
+        <file alias="NOTICE">../NOTICE</file>
+        <file alias="LICENSE">../LICENSE</file>
+    </qresource>
+</RCC>
