@@ -55,7 +55,7 @@ The application's Settings menu provides persistent Light, Dark, Green Phosphor,
 | LICENSE | Complete GPLv3 text. |
 | NOTICE | Copyright and project notice. |
 | machine-readme | Detailed technical, maintainer, and release reference. |
-| release-input/ | Local-only location for the tested updater AppImage embedded in a setup release. |
+| input-release/ | Git-ignored local directory for the updater AppImage embedded in a setup release. |
 
 Generated build output, local AppImages, and downloaded packaging tools are excluded from public source control by .gitignore.
 
@@ -72,6 +72,23 @@ A normal development build is:
     cmake --build linux-updater-app/build
 
 This produces the updater GUI, backend, and setup utility in the build directory. See [machine-readme](machine-readme) for packaging prerequisites and release-maintenance details.
+
+## Building AppImages
+
+Place `linuxdeploy-x86_64.AppImage` and `linuxdeploy-plugin-qt-x86_64.AppImage` in `linux-updater-app/`, then make them executable. After the normal CMake build, create the updater AppImage directly in the Git-ignored input directory:
+
+    chmod +x linux-updater-app/linuxdeploy-x86_64.AppImage \
+      linux-updater-app/linuxdeploy-plugin-qt-x86_64.AppImage
+    mkdir -p input-release
+    ./linux-updater-app/package-appimage.sh \
+      linux-updater-app/build input-release
+
+Keep exactly one updater AppImage in `input-release/`. Build the setup AppImage around it with:
+
+    ./linux-updater-app/package-setup-utility.sh \
+      linux-updater-app/build
+
+The setup packager accepts any `.AppImage` filename in `input-release/` and embeds it under the canonical payload name. Its output is `linux-updater-app/release/LUU_Setup_Utility-x86_64.AppImage`. Pass an explicit updater path as the second argument if the input directory contains multiple AppImages.
 
 ## Maintenance principles
 

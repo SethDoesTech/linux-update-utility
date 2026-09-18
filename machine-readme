@@ -53,7 +53,7 @@ The current CMake development builds include:
 
 ### Critical: the embedded payload is separate
 
-package-setup-utility.sh copies release-input/Linux_Update_Utility-x86_64.AppImage into the setup AppImage unchanged. It never rebuilds or inspects that file.
+package-setup-utility.sh copies the single AppImage found in input-release/ into the setup AppImage unchanged. It never rebuilds or inspects that file. An explicit payload path may be passed as the script's second argument.
 
 The current local payload was replaced on September 2, 2026 with a newer
 known-good updater AppImage (SHA-256
@@ -175,7 +175,7 @@ the packaged updater, not just from a development build.
 | linux-updater-app/luu-setup-utility.desktop | Desktop metadata for the setup AppImage. |
 | linux-updater-app/package-appimage.sh | Builds an updater AppImage and explicitly bundles required Qt XCB/Wayland support. |
 | linux-updater-app/package-setup-utility.sh | Builds a setup AppImage around an unchanged supplied updater payload. |
-| release-input/Linux_Update_Utility-x86_64.AppImage | Local release input; do not commit it to public source. |
+| input-release/*.AppImage | Local release input; the directory is ignored by Git. |
 
 ## Legal and credit behavior
 
@@ -269,34 +269,37 @@ choice, not a build failure.
 
 package-appimage.sh is the reproducible updater-packaging path. It makes a temporary AppDir, runs linuxdeploy plus its Qt plugin, explicitly includes the Qt XCB and Wayland support libraries, verifies expected paths, and emits an AppImage. It deliberately avoids copying broad unrelated desktop plugins.
 
-    cd linux-updater-app
-    ./package-appimage.sh build
+    mkdir -p input-release
+    ./linux-updater-app/package-appimage.sh \
+      linux-updater-app/build input-release
 
 The script refuses to overwrite an existing output. Archive or rename an older artifact before producing another.
 
 ### Build the one-file setup AppImage
 
-1. Create the local input directory, then put the exact tested updater at:
+1. Create the local input directory, then put exactly one tested updater AppImage in it. Its filename can be anything ending in `.AppImage`:
 
-        mkdir -p release-input
-        release-input/Linux_Update_Utility-x86_64.AppImage
+        mkdir -p input-release
+        cp /path/to/tested-updater.AppImage input-release/
 
 2. Record its hash if appropriate:
 
-        sha256sum release-input/Linux_Update_Utility-x86_64.AppImage
+        sha256sum input-release/*.AppImage
 
 3. Package the setup utility:
 
-        cd linux-updater-app
-        ./package-setup-utility.sh build
+        ./linux-updater-app/package-setup-utility.sh \
+          linux-updater-app/build
 
 On the current Arch development machine, the Qt deployment plugin's bundled
 `strip` is older than Arch's RELR-enabled libraries. For a local packaging
 build there, use:
 
         NO_STRIP=1 APPIMAGE_EXTRACT_AND_RUN=1 \
-          ./package-setup-utility.sh build \
-          ../release-input/Linux_Update_Utility-x86_64.AppImage release
+          ./linux-updater-app/package-setup-utility.sh \
+          linux-updater-app/build \
+          input-release/your-tested-updater.AppImage \
+          linux-updater-app/release
 
 `NO_STRIP=1` skips only optional size-reduction stripping. It does not alter
 the compiled setup executable or the embedded updater payload. This is an
@@ -334,7 +337,7 @@ runtime dependencies before identifying the layer involved.
 | AppImage fails to mount | Host FUSE configuration | Check FUSE; use extraction fallback only for diagnosis. |
 | Qt says XCB or Wayland plugin cannot load | AppImage runtime bundle | Inspect the AppDir and package the missing Qt support-library closure. |
 | Launcher has no icon or does not appear | Desktop entry/icon install | Validate desktop entry, paths, permissions, and desktop cache behavior. |
-| Setup image installs an older app | Release payload discipline | Replace release-input payload with the exact newly tested updater AppImage. |
+| Setup image installs an older app | Release payload discipline | Replace the input-release payload with the exact newly tested updater AppImage. |
 | Packaging fails while stripping RELR libraries on Arch | linuxdeploy tool age versus Arch libraries | Use `NO_STRIP=1`; do not mistake it for a missing application dependency. |
 | Setup AppImage fails with an ISA/CPU requirement on another computer | Build-host library baseline / compatibility | Capture the exact loader error; validate on the intended Ubuntu 24.04 release machine before release. |
 | Update command fails | Host package manager or generated command | Inspect generated script and GUI output before changing GUI code. |
@@ -405,7 +408,7 @@ package-appimage.sh and linux-update-utility.desktop support a reproducible upda
 | linux-updater-app/Linux_Update_Utility-x86_64.AppImage | Older manual AppImage; differs from the intended local payload and is not read by the setup packager. |
 | linux-updater-app/linuxdeploy-x86_64.AppImage | Downloaded packaging tool, not source/runtime content. |
 | linux-updater-app/linuxdeploy-plugin-qt-x86_64.AppImage | Downloaded packaging tool, not source/runtime content. |
-| release-input/Linux_Update_Utility-x86_64.AppImage | Necessary local release input but not public source. |
+| input-release/ | Necessary local release input; the entire directory is ignored by Git. |
 | Empty workspace directories such as .git, .agents, .codex | Environment/workspace state, not project source. |
 
 .gitignore now excludes these paths without deleting anything locally.
@@ -433,7 +436,7 @@ Either choice is safe for the current UI. Decide later whether full legal text s
 1. Review LICENSE, NOTICE, source, and README.md.
 2. Build the updater from the intended release revision on Ubuntu 24.04 with generic x86-64 flags.
 3. Test the updater AppImage and record its hash.
-4. Replace release-input/Linux_Update_Utility-x86_64.AppImage with that exact tested artifact.
+4. Put exactly that tested updater AppImage in input-release/ and remove any other AppImages from that directory.
 5. Rebuild the setup utility and package the one-file setup AppImage.
 6. Test that exact setup AppImage on Ubuntu, Fedora, and Arch/CachyOS, including first install and Update Existing Install.
 7. Confirm the packaged updater contains the intended legal/footer UI, then test generation, update, system info, launch, and reopen.

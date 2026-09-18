@@ -7,7 +7,7 @@
 
 # Downloaded packaging tools and locally produced artifacts.
 /linux-updater-app/*.AppImage
-/release-input/*.AppImage
+/input-release/
 
 # Editor and CMake user-local files.
 *.user

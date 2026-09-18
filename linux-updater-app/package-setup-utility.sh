@@ -8,8 +8,9 @@ set -euo pipefail
 script_directory=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 project_directory=$(cd "$script_directory/.." && pwd)
 build_directory=${1:-"$script_directory/build"}
-payload_path=${2:-"$project_directory/release-input/Linux_Update_Utility-x86_64.AppImage"}
+payload_path=${2:-}
 release_directory=${3:-"$script_directory/release"}
+input_directory="$project_directory/input-release"
 
 linuxdeploy=${LINUXDEPLOY:-"$script_directory/linuxdeploy-x86_64.AppImage"}
 qt_plugin=${LINUXDEPLOY_PLUGIN_QT:-"$script_directory/linuxdeploy-plugin-qt-x86_64.AppImage"}
@@ -29,12 +30,36 @@ require_file()
     fi
 }
 
+if [[ -z "$payload_path" ]]; then
+    shopt -s nullglob
+    payload_candidates=("$input_directory"/*.AppImage)
+    shopt -u nullglob
+
+    if (( ${#payload_candidates[@]} == 0 )); then
+        printf 'ERROR: No updater AppImage was found in: %s\n' \
+            "$input_directory" >&2
+        printf 'Place exactly one updater AppImage there, or pass its path as the second argument.\n' >&2
+        exit 1
+    fi
+
+    if (( ${#payload_candidates[@]} > 1 )); then
+        printf 'ERROR: More than one AppImage was found in: %s\n' \
+            "$input_directory" >&2
+        printf 'Keep exactly one AppImage there, or pass the desired path as the second argument.\n' >&2
+        exit 1
+    fi
+
+    payload_path=${payload_candidates[0]}
+fi
+
 require_file "$build_directory/luu-setup-utility"
 require_file "$payload_path"
 require_file "$linuxdeploy"
 require_file "$qt_plugin"
 require_file "$desktop_file"
 require_file "$icon_file"
+
+printf 'Using updater payload: %s\n' "$payload_path"
 
 if [[ -z "$qmake" ]]; then
     printf 'ERROR: qmake6 was not found. Install the Qt 6 development tools.\n' >&2
