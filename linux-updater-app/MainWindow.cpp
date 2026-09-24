@@ -274,7 +274,7 @@ void MainWindow::setupUI()
 
     creditLabel =
         new QLabel(
-            "Created by <b>Seth Langer</b>",
+            "Created by <b>Seth Langer</b> &nbsp; | &nbsp; RELEASE: 1.0",
             this
         );
 

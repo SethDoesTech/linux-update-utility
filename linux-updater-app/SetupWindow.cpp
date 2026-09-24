@@ -67,7 +67,7 @@ SetupWindow::SetupWindow()
 
     QHBoxLayout *creditLayout = new QHBoxLayout();
     QLabel *creditLabel = new QLabel(
-        "Created by <b>Seth Langer</b>",
+        "Created by <b>Seth Langer</b> &nbsp; | &nbsp; RELEASE: 1.0",
         this
     );
     creditLabel->setTextFormat(Qt::RichText);

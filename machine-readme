@@ -43,7 +43,7 @@ The updater and separate setup utility have worked in Ubuntu and Fedora VM testi
 
 The current CMake development builds include:
 
-* Seth Langer creator credit in the footer;
+* Seth Langer creator credit and RELEASE: 1.0 in both application footers, using the existing footer styling;
 * a small white circular information button with a three-line notice;
 * the complete GPLv3 in the root LICENSE file;
 * a Settings menu that can uninstall the system-wide application while preserving user-local data;
