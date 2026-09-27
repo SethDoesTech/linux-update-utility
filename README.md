@@ -31,7 +31,7 @@ The GUI handles interaction, output, and administrator authorization. The backen
 Supported package managers are pacman, apt, dnf, snap and flatpak. The generated script
 uses commands with confirmations disabled.
 
-System package-manager commands use one sudo invocation. Flatpak runs as the normal user. Passwords are supplied through standard input and are not written into generated scripts or command-line arguments.I have done my best to make this app secure, passwords are never saved and sudo is used only in update scripts.
+System package-manager commands use one sudo invocation. Flatpak runs as the normal user. Passwords are supplied through standard input and are not written into generated scripts or command-line arguments. Sudo authorizes system updates, installation, and uninstallation.
 
 ## Installation
 

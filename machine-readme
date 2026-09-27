@@ -37,11 +37,11 @@ The updater has three distinct responsibilities that should remain separate:
 | C++ backend | Detect results, explicit command selection, update-script generation | Render GUI or install files system-wide. |
 | bash / host tools | Executable detection, generated script execution, package updates | Carry application state or embed GUI logic. |
 
-## Current status and release rule
+## Release 1.0
 
 The updater and separate setup utility have worked in Ubuntu and Fedora VM testing. The setup utility creates a normal application-menu entry, installs the updater to /usr/local/bin, and can update an existing install.
 
-The current CMake development builds include:
+Release 1.0 includes:
 
 * Seth Langer creator credit and RELEASE: 1.0 in both application footers, using the existing footer styling;
 * a small white circular information button with a three-line notice;
@@ -55,21 +55,8 @@ The current CMake development builds include:
 
 package-setup-utility.sh copies the single AppImage found in input-release/ into the setup AppImage unchanged. It never rebuilds or inspects that file. An explicit payload path may be passed as the script's second argument.
 
-The current local payload was replaced on September 2, 2026 with a newer
-known-good updater AppImage (SHA-256
-`37ec707f5ea6485f92161e16a02141ded0a670d8aaf3d89b14ee5667e5c72964`). It
-contains the current footer and compact legal-notice UI. A setup AppImage was
-successfully packaged around it on the Arch desktop and used there to update
-an existing installation successfully.
-
-This is useful validation, not a compatibility sign-off. The newly packaged
-setup AppImage still needs a clean test on the intended Ubuntu 24.04 laptop
-and other target systems. The laptop reported a CPU ISA compatibility problem,
-and an Ubuntu 26.04 live environment was not usable for follow-up testing.
-Record the exact error before changing compiler flags or broadening bundled
-libraries.
-
-Do not distribute a setup AppImage until its setup executable and embedded updater payload come from the intended release revision and have been tested together.
+For each release, package the setup executable and embedded updater from the
+intended release revision and test them together.
 
 ## Architecture
 
@@ -191,7 +178,7 @@ The small information button deliberately opens only this short notice:
 
 The complete GPLv3 is in the root LICENSE file. NOTICE contains the longer project notice supplied by the maintainer. Keep both with source releases and any other release materials required by the project policy.
 
-The two .qrc files also compile LICENSE and NOTICE into the executables, but LegalNotices.cpp intentionally displays hard-coded short text instead of reading the resources. This keeps the dialog small; see the decision item in the audit section before changing it.
+The two .qrc files also compile LICENSE and NOTICE into the executables, but LegalNotices.cpp intentionally displays hard-coded short text instead of reading the resources. This keeps the dialog small while retaining the full notices in the executable resources.
 
 ## Tools and build environment
 
@@ -405,49 +392,16 @@ Make packaging-only changes in package-appimage.sh or package-setup-utility.sh, 
 * Do not silently install packages, change repositories, or add a background service.
 * Do not claim universal Linux support. State tested distributions and known requirements honestly.
 
-## Audit: source-release cleanup decisions
+## Source distribution
 
-No files were removed during this audit.
+Keep README.md, machine-readme, LICENSE, NOTICE, C++ source, the detection
+helper, CMake configuration, desktop files, icon, and packaging scripts in
+source distributions.
 
-### Keep as project source/documentation
-
-Keep README.md, machine-readme, LICENSE, NOTICE, C++ source, detection script, CMake file, desktop files, icon, and packaging scripts.
-
-package-appimage.sh and linux-update-utility.desktop support a reproducible updater-AppImage path. They are not required merely to wrap a prebuilt payload, but they should remain if the project wants to be able to produce its updater AppImage from source.
-
-### Generated/local-only: exclude from a public source archive or repository
-
-| Path | Why it is excluded |
-| --- | --- |
-| linux-updater-app/build/ | Reproducible CMake/Qt build output. |
-| linux-updater-app/AppDir/ | Old manual staging bundle; current scripts create temporary AppDirs. |
-| linux-update-utility | Local compiled backend binary; CMake rebuilds it under linux-updater-app/build/. |
-| scripts/update-script-output.sh | Generated fallback script containing stale generated commands. |
-| linux-updater-app/Linux_Update_Utility-x86_64.AppImage | Older manual AppImage; differs from the intended local payload and is not read by the setup packager. |
-| linux-updater-app/linuxdeploy-x86_64.AppImage | Downloaded packaging tool, not source/runtime content. |
-| linux-updater-app/linuxdeploy-plugin-qt-x86_64.AppImage | Downloaded packaging tool, not source/runtime content. |
-| input-release/ | Necessary local release input; the entire directory is ignored by Git. |
-| Empty workspace directories such as .git, .agents, .codex | Environment/workspace state, not project source. |
-
-.gitignore now excludes these paths without deleting anything locally.
-
-### Optional desktop-category cleanup
-
-Both desktop files currently use:
-
-    Categories=System;Settings;
-
-desktop-file-validate accepts this but warns that the two main categories may
-make the application appear more than once in some menus. Pick one main
-category later if duplicate menu placement is observed. No change was made
-during this audit.
-
-### Optional legal-resource cleanup
-
-resources.qrc and setup-resources.qrc embed LICENSE and NOTICE, but no current C++ code reads :/LICENSE or :/NOTICE. Keeping them compiles legal text into both executables; removing them reduces duplication and avoids implying that the small dialog reads those files.
-
-Either choice is safe for the current UI. Decide later whether full legal text should be invisibly embedded or only shipped as accessible files with source/release materials.
-
+.gitignore excludes local build output, AppDir staging, generated update
+scripts, downloaded packaging tools, and release AppImages. Distribute
+release binaries separately from source. Workspace state such as .git,
+.agents, and .codex does not belong in a source archive.
 
 ## Final release checklist
 
