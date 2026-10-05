@@ -83,6 +83,12 @@ intended release revision and test them together.
 
 The script is human-readable by design. Never write it inside a read-only AppImage filesystem.
 
+The update, install, and uninstall authorization prompts share PasswordDialog.
+It requests the desktop on-screen keyboard when the password field gains focus
+or is clicked/tapped, and retains masked, sensitive input without prediction.
+The desktop must provide and enable an input method; this does not bundle a
+keyboard. Verify keyboard appearance on KDE with the packaged AppImage.
+
 ### Setup utility runtime flow
 
 1. setup-main.cpp creates SetupWindow.
@@ -154,6 +160,7 @@ the packaged updater, not just from a development build.
 | linux-updater-app/MainWindow.hpp/.cpp | Updater UI, generation, update process, password prompt, output window, system-info dialog, footer. |
 | linux-updater-app/setup-main.cpp | Setup utility entry point. |
 | linux-updater-app/SetupWindow.hpp/.cpp | Setup/update UI, payload staging, authorization, installation, and existing-install replacement. |
+| linux-updater-app/PasswordDialog.hpp | Shared masked authorization prompt with explicit desktop keyboard requests. |
 | linux-updater-app/LegalNotices.hpp/.cpp | Shared three-line copyright/GPL information dialog. |
 | linux-updater-app/resources.qrc | Main GUI icon plus embedded LICENSE/NOTICE resources. |
 | linux-updater-app/setup-resources.qrc | Setup GUI icon plus embedded LICENSE/NOTICE resources. |

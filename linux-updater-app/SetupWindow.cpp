@@ -1,14 +1,13 @@
 #include "SetupWindow.hpp"
 #include "LegalNotices.hpp"
+#include "PasswordDialog.hpp"
 
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QHBoxLayout>
-#include <QInputDialog>
 #include <QLabel>
-#include <QLineEdit>
 #include <QMessageBox>
 #include <QProcess>
 #include <QPushButton>
@@ -67,7 +66,7 @@ SetupWindow::SetupWindow()
 
     QHBoxLayout *creditLayout = new QHBoxLayout();
     QLabel *creditLabel = new QLabel(
-        "Created by <b>Seth Langer</b> &nbsp; | &nbsp; RELEASE: 1.0",
+        "Created by <b>Seth Langer</b> &nbsp; | &nbsp; RELEASE: 1.1",
         this
     );
     creditLabel->setTextFormat(Qt::RichText);
@@ -162,12 +161,9 @@ bool SetupWindow::requestAdministratorPassword(QString &password)
 {
     bool accepted = false;
 
-    password = QInputDialog::getText(
+    password = PasswordDialog::getPassword(
         this,
-        "Administrator Authorization",
         "Enter your password to install Linux Update Utility:",
-        QLineEdit::Password,
-        QString(),
         &accepted
     );
 

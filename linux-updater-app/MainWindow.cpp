@@ -1,5 +1,6 @@
 #include "MainWindow.hpp"
 #include "LegalNotices.hpp"
+#include "PasswordDialog.hpp"
 
 #include <QPushButton>
 #include <QVBoxLayout>
@@ -16,8 +17,6 @@
 #include <QSysInfo>
 #include <QFileInfo>
 #include <QPlainTextEdit>
-#include <QInputDialog>
-#include <QLineEdit>
 #include <QFont>
 #include <QTextCursor>
 #include <QStandardPaths>
@@ -274,7 +273,7 @@ void MainWindow::setupUI()
 
     creditLabel =
         new QLabel(
-            "Created by <b>Seth Langer</b> &nbsp; | &nbsp; RELEASE: 1.0",
+            "Created by <b>Seth Langer</b> &nbsp; | &nbsp; RELEASE: 1.1",
             this
         );
 
@@ -575,12 +574,9 @@ void MainWindow::uninstallApplication()
 
     bool accepted = false;
     QString password =
-        QInputDialog::getText(
+        PasswordDialog::getPassword(
             this,
-            "Administrator Authorization",
             "Enter your password to uninstall Linux Update Utility:",
-            QLineEdit::Password,
-            QString(),
             &accepted
         );
 
@@ -833,12 +829,9 @@ bool MainWindow::requestSudoPassword()
     bool accepted = false;
 
     QString password =
-        QInputDialog::getText(
+        PasswordDialog::getPassword(
             this,
-            "Administrator Authorization",
             "Enter your password to authorize system updates:",
-            QLineEdit::Password,
-            QString(),
             &accepted
         );
 

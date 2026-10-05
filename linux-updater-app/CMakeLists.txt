@@ -31,6 +31,7 @@ add_executable(
     MainWindow.hpp
     LegalNotices.cpp
     LegalNotices.hpp
+    PasswordDialog.hpp
     resources.qrc
 )
 
@@ -42,6 +43,7 @@ add_executable(
     SetupWindow.hpp
     LegalNotices.cpp
     LegalNotices.hpp
+    PasswordDialog.hpp
     setup-resources.qrc
 )
 
