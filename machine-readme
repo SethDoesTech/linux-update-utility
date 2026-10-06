@@ -169,6 +169,7 @@ the packaged updater, not just from a development build.
 | linux-updater-app/luu-setup-utility.desktop | Desktop metadata for the setup AppImage. |
 | linux-updater-app/package-appimage.sh | Builds an updater AppImage and explicitly bundles required Qt XCB/Wayland support. |
 | linux-updater-app/package-setup-utility.sh | Builds a setup AppImage around an unchanged supplied updater payload. |
+| linux-updater-app/package-qt-platforms.sh | Shared XCB/Wayland runtime bundling and verification for both AppImages. |
 | input-release/*.AppImage | Local release input; the directory is ignored by Git. |
 
 ## Legal and credit behavior
@@ -245,7 +246,8 @@ scripts parse:
     cmake --build linux-updater-app/build --target \
       linux-update-utility linux-updater-app luu-setup-utility -j2
     bash -n linux-updater-app/package-appimage.sh \
-      linux-updater-app/package-setup-utility.sh
+      linux-updater-app/package-setup-utility.sh \
+      linux-updater-app/package-qt-platforms.sh
 
 The desktop files can be checked when desktop-file-validate is available:
 
@@ -280,6 +282,33 @@ packaging diagnostics.
 ### Build the updater AppImage
 
 package-appimage.sh is the reproducible updater-packaging path. It makes a temporary AppDir, runs linuxdeploy plus its Qt plugin, explicitly includes the Qt XCB and Wayland support libraries, verifies expected paths, and emits an AppImage. It deliberately avoids copying broad unrelated desktop plugins.
+
+Both packagers call package-qt-platforms.sh after the normal Qt deployment.
+It stages the build Qt's Wayland platform plugins (supporting both the older
+generic/EGL names and the newer single libqwayland.so), xdg-shell integration,
+and Qt's Wayland EGL client integration when available. A second linuxdeploy
+pass scans these plugins, bundles their library dependencies, and sets their
+RPATHs before verifying the required files. Install qt6-wayland on the build
+machine. Do not force QT_QPA_PLATFORM=xcb or QT_IM_MODULE=qtvirtualkeyboard:
+the desktop supplies the on-screen keyboard through its normal input method.
+
+On KDE Wayland, test each packaged GUI's password prompt by clicking/tapping
+the field and cancelling without entering a password. If the keyboard works
+only in a development build, run the AppImage with QT_DEBUG_PLUGINS=1,
+QT_FORCE_STDERR_LOGGING=1, and QT_LOGGING_RULES='qt.qpa.wayland.*=true' to
+check whether the bundled Wayland
+platform and xdg-shell plugins load. Test with QT_QPA_PLATFORM=wayland to
+expose a Wayland initialization failure instead of an XCB fallback. Checking
+only for libqwayland.so is insufficient; missing shell integration can prevent
+native Wayland initialization and desktop keyboard requests.
+
+Local verification on Starch/KDE Wayland with Qt 6.11.2: an automatically
+closing probe using the shared PasswordDialog and each extracted AppImage's
+Qt runtime reported platform=xcb and keyboardVisible=false for the old
+bundles, and platform=wayland and keyboardVisible=true for both rebuilt
+bundles. The development runtime also reported wayland/true. This checks the
+dialog and packaged runtime; the cross-distribution release matrix still
+applies.
 
     mkdir -p input-release
     ./linux-updater-app/package-appimage.sh \

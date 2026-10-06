@@ -7,6 +7,8 @@
 set -euo pipefail
 
 script_directory=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=package-qt-platforms.sh
+source "$script_directory/package-qt-platforms.sh"
 build_directory=${1:-"$script_directory/build"}
 release_directory=${2:-"$script_directory/release"}
 
@@ -46,22 +48,6 @@ if [[ -e "$output_appimage" ]]; then
     exit 1
 fi
 
-qt_library_directory=$(
-    "$qmake" -query QT_INSTALL_LIBS
-)
-
-qt_plugin_directory=$(
-    "$qmake" -query QT_INSTALL_PLUGINS
-)
-
-xcb_qpa_library="$qt_library_directory/libQt6XcbQpa.so.6"
-wayland_client_library="$qt_library_directory/libQt6WaylandClient.so.6"
-wayland_platform_plugin="$qt_plugin_directory/platforms/libqwayland.so"
-
-require_file "$xcb_qpa_library"
-require_file "$wayland_client_library"
-require_file "$wayland_platform_plugin"
-
 mkdir -p "$release_directory"
 appdir=$(mktemp -d "${TMPDIR:-/tmp}/luu-appdir.XXXXXX")
 package_directory=$(mktemp -d "${TMPDIR:-/tmp}/luu-package.XXXXXX")
@@ -93,29 +79,7 @@ export LINUXDEPLOY_PLUGIN_QT="$qt_plugin"
     --icon-file "$icon_file" \
     --plugin qt
 
-# The Qt plugin scan does not always include these optional platform-support
-# libraries. Ask linuxdeploy to bundle each library and its direct dependency
-# closure explicitly.
-"$linuxdeploy" \
-    --appdir "$appdir" \
-    --library "$xcb_qpa_library" \
-    --library "$wayland_client_library"
-
-# Preserve native Wayland support without scanning a broad desktop-plugin set.
-install -Dm755 \
-    "$wayland_platform_plugin" \
-    "$appdir/usr/plugins/platforms/libqwayland.so"
-
-required_paths=(
-    "$appdir/usr/plugins/platforms/libqxcb.so"
-    "$appdir/usr/plugins/platforms/libqwayland.so"
-    "$appdir/usr/lib/libQt6XcbQpa.so.6"
-    "$appdir/usr/lib/libQt6WaylandClient.so.6"
-)
-
-for required_path in "${required_paths[@]}"; do
-    require_file "$required_path"
-done
+bundle_qt_platforms "$appdir"
 
 (
     cd "$package_directory"

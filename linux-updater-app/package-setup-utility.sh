@@ -6,6 +6,8 @@
 set -euo pipefail
 
 script_directory=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=package-qt-platforms.sh
+source "$script_directory/package-qt-platforms.sh"
 project_directory=$(cd "$script_directory/.." && pwd)
 build_directory=${1:-"$script_directory/build"}
 payload_path=${2:-}
@@ -102,6 +104,8 @@ export LINUXDEPLOY_PLUGIN_QT="$qt_plugin"
     --desktop-file "$desktop_file" \
     --icon-file "$icon_file" \
     --plugin qt
+
+bundle_qt_platforms "$appdir"
 
 embedded_payload="$appdir/usr/share/linux-update-utility/payload/$payload_name"
 require_file "$embedded_payload"

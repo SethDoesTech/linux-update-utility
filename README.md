@@ -86,6 +86,12 @@ It configures and compiles the project, builds the updater AppImage, and embeds 
 
 On its first run, the script downloads the official linuxdeploy and Qt-plugin AppImages from their continuous GitHub releases. It safely builds in temporary directories before replacing those two generated outputs. For a custom prebuilt updater instead, put exactly one `.AppImage` in the Git-ignored `input-release/` directory and run `./linux-updater-app/package-setup-utility.sh linux-updater-app/build`.
 
+Both AppImages bundle Qt's XCB and native Wayland support, including the
+Wayland shell integration needed for desktop on-screen keyboards. The build
+machine needs Qt 6 Wayland installed (`qt6-wayland` on Ubuntu and Arch/Starch).
+Enable your keyboard in the desktop settings; password prompts request it
+through the desktop's input method.
+
 ## Maintenance principles
 
 * Keep package-manager commands explicit and easy to inspect.
