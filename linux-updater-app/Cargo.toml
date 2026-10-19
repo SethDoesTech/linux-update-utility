@@ -1,0 +1,23 @@
+[package]
+name = "luu-gui"
+version = "1.2.0"
+edition = "2021"
+rust-version = "1.88"
+license = "GPL-3.0-only"
+
+[dependencies]
+eframe = { version = "=0.31.1", default-features = false, features = ["default_fonts", "glow", "wayland", "x11", "accesskit"] }
+tempfile = "3.20"
+zeroize = "1.8"
+
+[[bin]]
+name = "linux-updater-app"
+path = "src/bin/updater.rs"
+
+[[bin]]
+name = "luu-setup-utility"
+path = "src/bin/setup.rs"
+
+[[bin]]
+name = "linux-update-utility"
+path = "src/bin/backend.rs"

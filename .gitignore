@@ -13,3 +13,6 @@
 *.user
 *.user.*
 CMakeUserPresets.json
+
+# Rust build output (Cargo.lock is tracked).
+/linux-updater-app/target/

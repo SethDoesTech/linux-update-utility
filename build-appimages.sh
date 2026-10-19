@@ -10,9 +10,7 @@ build_directory="$app_directory/build"
 input_directory="$project_directory/input-release"
 release_directory="$app_directory/release"
 linuxdeploy="$app_directory/linuxdeploy-x86_64.AppImage"
-qt_plugin="$app_directory/linuxdeploy-plugin-qt-x86_64.AppImage"
 linuxdeploy_url="https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"
-qt_plugin_url="https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage"
 updater_name="Linux_Update_Utility-x86_64.AppImage"
 setup_name="LUU_Setup_Utility-x86_64.AppImage"
 
@@ -59,11 +57,17 @@ download_tool()
 }
 
 require_command cmake
-require_command qmake6
+# Rustup installs here even when the invoking shell has not loaded its env file.
+if ! command -v cargo >/dev/null 2>&1; then
+    cargo_bin_directory="${CARGO_HOME:-$HOME/.cargo}/bin"
+    if [[ -x "$cargo_bin_directory/cargo" ]]; then
+        export PATH="$cargo_bin_directory:$PATH"
+    fi
+fi
+require_command cargo
 download_tool "$linuxdeploy_url" "$linuxdeploy"
-download_tool "$qt_plugin_url" "$qt_plugin"
 
-chmod +x "$linuxdeploy" "$qt_plugin"
+chmod +x "$linuxdeploy"
 
 # AppImage extraction avoids depending on a working FUSE mount. Arch-family
 # systems also need stripping disabled for newer RELR-enabled libraries.
@@ -90,7 +94,8 @@ cleanup()
 trap cleanup EXIT
 
 printf '\n[1/4] Configuring the project...\n'
-cmake -S "$app_directory" -B "$build_directory"
+cmake -S "$app_directory" -B "$build_directory" \
+    -DCARGO_EXECUTABLE="$(command -v cargo)"
 
 printf '\n[2/4] Compiling the application...\n'
 cmake --build "$build_directory" -j2

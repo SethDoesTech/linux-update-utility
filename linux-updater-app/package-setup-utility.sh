@@ -6,17 +6,15 @@
 set -euo pipefail
 
 script_directory=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-# shellcheck source=package-qt-platforms.sh
-source "$script_directory/package-qt-platforms.sh"
 project_directory=$(cd "$script_directory/.." && pwd)
+# shellcheck source=package-rust-runtime.sh
+source "$script_directory/package-rust-runtime.sh"
 build_directory=${1:-"$script_directory/build"}
 payload_path=${2:-}
 release_directory=${3:-"$script_directory/release"}
 input_directory="$project_directory/input-release"
 
 linuxdeploy=${LINUXDEPLOY:-"$script_directory/linuxdeploy-x86_64.AppImage"}
-qt_plugin=${LINUXDEPLOY_PLUGIN_QT:-"$script_directory/linuxdeploy-plugin-qt-x86_64.AppImage"}
-qmake=${QMAKE:-$(command -v qmake6 || true)}
 
 setup_name="LUU_Setup_Utility-x86_64.AppImage"
 payload_name="Linux_Update_Utility-x86_64.AppImage"
@@ -57,16 +55,10 @@ fi
 require_file "$build_directory/luu-setup-utility"
 require_file "$payload_path"
 require_file "$linuxdeploy"
-require_file "$qt_plugin"
 require_file "$desktop_file"
 require_file "$icon_file"
 
 printf 'Using updater payload: %s\n' "$payload_path"
-
-if [[ -z "$qmake" ]]; then
-    printf 'ERROR: qmake6 was not found. Install the Qt 6 development tools.\n' >&2
-    exit 1
-fi
 
 if [[ -e "$output_appimage" ]]; then
     printf 'ERROR: Refusing to overwrite existing artifact: %s\n' \
@@ -94,18 +86,14 @@ install -Dm644 \
     "$payload_path" \
     "$appdir/usr/share/linux-update-utility/payload/$payload_name"
 
-chmod +x "$linuxdeploy" "$qt_plugin"
-
-export QMAKE="$qmake"
-export LINUXDEPLOY_PLUGIN_QT="$qt_plugin"
+chmod +x "$linuxdeploy"
+rust_runtime_arguments
 
 "$linuxdeploy" \
     --appdir "$appdir" \
     --desktop-file "$desktop_file" \
     --icon-file "$icon_file" \
-    --plugin qt
-
-bundle_qt_platforms "$appdir"
+    "${RUST_RUNTIME_ARGS[@]}"
 
 embedded_payload="$appdir/usr/share/linux-update-utility/payload/$payload_name"
 require_file "$embedded_payload"

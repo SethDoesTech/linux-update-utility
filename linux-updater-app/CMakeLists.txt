@@ -1,143 +1,29 @@
 cmake_minimum_required(VERSION 3.16)
+project(LinuxUpdaterApp VERSION 1.2 LANGUAGES NONE)
 
-project(
-    LinuxUpdaterApp
-    VERSION 1.0
-    LANGUAGES CXX
+find_program(CARGO_EXECUTABLE cargo)
+if(NOT CARGO_EXECUTABLE)
+    message(FATAL_ERROR "Rust/Cargo 1.88 or newer is required to build the GUI. Install Rust and make cargo available on PATH.")
+endif()
+set(RUST_TARGET_DIR "${CMAKE_BINARY_DIR}/cargo")
+file(GLOB_RECURSE RUST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.rs")
+add_custom_command(
+    OUTPUT "${CMAKE_BINARY_DIR}/linux-updater-app" "${CMAKE_BINARY_DIR}/luu-setup-utility" "${CMAKE_BINARY_DIR}/linux-update-utility"
+    COMMAND "${CARGO_EXECUTABLE}" build --locked --release
+        --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/Cargo.toml"
+        --target-dir "${RUST_TARGET_DIR}"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${RUST_TARGET_DIR}/release/linux-updater-app" "${CMAKE_BINARY_DIR}/linux-updater-app"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${RUST_TARGET_DIR}/release/luu-setup-utility" "${CMAKE_BINARY_DIR}/luu-setup-utility"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${RUST_TARGET_DIR}/release/linux-update-utility" "${CMAKE_BINARY_DIR}/linux-update-utility"
+    DEPENDS ${RUST_SOURCES} Cargo.toml Cargo.lock luu-icon.svg luu-icon.png
+        ../scripts/detect-package-managers.sh ../scripts/update-system.sh
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    COMMENT "Building Rust updater and setup interfaces"
+    VERBATIM
 )
-
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-set(CMAKE_AUTOMOC ON)
-set(CMAKE_AUTORCC ON)
-
-find_package(
-    Qt6 REQUIRED
-    COMPONENTS Widgets
-)
-
-# Backend
-add_executable(
-    linux-update-utility
-    ../src/backend/linux-update-utility.cpp
-)
-
-# GUI
-add_executable(
-    linux-updater-app
-    main.cpp
-    MainWindow.cpp
-    MainWindow.hpp
-    LegalNotices.cpp
-    LegalNotices.hpp
-    PasswordDialog.hpp
-    resources.qrc
-)
-
-# System-wide AppImage installer.
-add_executable(
-    luu-setup-utility
-    setup-main.cpp
-    SetupWindow.cpp
-    SetupWindow.hpp
-    LegalNotices.cpp
-    LegalNotices.hpp
-    PasswordDialog.hpp
-    setup-resources.qrc
-)
-
-# Conservative x86-64 baseline.
-target_compile_options(
-    linux-update-utility
-    PRIVATE
-    -march=x86-64
-    -mtune=generic
-)
-
-target_compile_options(
-    linux-updater-app
-    PRIVATE
-    -march=x86-64
-    -mtune=generic
-)
-
-target_compile_options(
-    luu-setup-utility
-    PRIVATE
-    -march=x86-64
-    -mtune=generic
-)
-
-target_link_libraries(
-    linux-updater-app
-    PRIVATE
-    Qt6::Widgets
-)
-
-target_link_libraries(
-    luu-setup-utility
-    PRIVATE
-    Qt6::Widgets
-)
-
-# Keep the backend beside the GUI during development.
-set_target_properties(
-    linux-update-utility
-    linux-updater-app
-    luu-setup-utility
-    PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY
-    "${CMAKE_BINARY_DIR}"
-)
-
-#
-# Installation / AppDir layout
-#
-# AppDir/
-# ├── scripts/
-# │   └── detect-package-managers.sh
-# └── usr/
-#     ├── bin/
-#     │   ├── linux-updater-app
-#     │   └── linux-update-utility
-#     └── share/
-#         ├── applications/
-#         │   └── linux-update-utility.desktop
-#         └── icons/
-#             └── hicolor/
-#                 └── scalable/
-#                     └── apps/
-#                         └── linux-update-utility.svg
-#
-
-install(
-    TARGETS
-        linux-updater-app
-        linux-update-utility
-    RUNTIME DESTINATION
-        usr/bin
-)
-
-install(
-    PROGRAMS
-        ${CMAKE_CURRENT_SOURCE_DIR}/../scripts/detect-package-managers.sh
-    DESTINATION
-        scripts
-)
-
-install(
-    FILES
-        ${CMAKE_CURRENT_SOURCE_DIR}/luu-icon.svg
-    DESTINATION
-        usr/share/icons/hicolor/scalable/apps
-    RENAME
-        linux-update-utility.svg
-)
-
-install(
-    FILES
-        ${CMAKE_CURRENT_SOURCE_DIR}/linux-update-utility.desktop
-    DESTINATION
-        usr/share/applications
-)
+add_custom_target(rust-apps ALL DEPENDS "${CMAKE_BINARY_DIR}/linux-updater-app" "${CMAKE_BINARY_DIR}/luu-setup-utility" "${CMAKE_BINARY_DIR}/linux-update-utility")
+install(PROGRAMS "${CMAKE_BINARY_DIR}/linux-updater-app" DESTINATION usr/bin)
+install(PROGRAMS "${CMAKE_BINARY_DIR}/linux-update-utility" DESTINATION usr/bin)
+install(PROGRAMS ../scripts/detect-package-managers.sh ../scripts/update-system.sh DESTINATION scripts)
+install(FILES luu-icon.svg DESTINATION usr/share/icons/hicolor/scalable/apps RENAME linux-update-utility.svg)
+install(FILES linux-update-utility.desktop DESTINATION usr/share/applications)
