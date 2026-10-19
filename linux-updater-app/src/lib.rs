@@ -243,6 +243,7 @@ struct Gui {
     password_action: Option<Action>,
     password: Zeroizing<String>,
     focus_password: bool,
+    password_composing: bool,
     confirm_uninstall: bool,
     close_after_message: bool,
 }
@@ -274,6 +275,7 @@ impl Gui {
             password_action: None,
             password: Zeroizing::new(String::new()),
             focus_password: false,
+            password_composing: false,
             confirm_uninstall: false,
             close_after_message: false,
         }
@@ -290,6 +292,7 @@ impl Gui {
         self.password.zeroize();
         self.password_action = Some(action);
         self.focus_password = true;
+        self.password_composing = false;
     }
     fn poll(&mut self) {
         let events: Vec<_> = self
@@ -414,8 +417,41 @@ impl Gui {
                         }
                         _ => "Enter your password to authorize system updates:",
                     });
+                    let password_id = egui::Id::new("administrator_password");
+                    if ui.memory(|memory| memory.has_focus(password_id)) {
+                        // egui 0.31 drops commit-only IME input after the first
+                        // character because its composition cursor is stale.
+                        // Start each standalone commit at the current cursor,
+                        // while preserving real preedit/composition sequences.
+                        ui.input_mut(|input| {
+                            let events = std::mem::take(&mut input.events);
+                            for event in events {
+                                match &event {
+                                    egui::Event::Ime(egui::ImeEvent::Preedit(_)) => {
+                                        self.password_composing = true;
+                                    }
+                                    egui::Event::Ime(egui::ImeEvent::Commit(_)) => {
+                                        if !self.password_composing {
+                                            input
+                                                .events
+                                                .push(egui::Event::Ime(egui::ImeEvent::Enabled));
+                                        }
+                                        self.password_composing = false;
+                                    }
+                                    egui::Event::Ime(egui::ImeEvent::Disabled) => {
+                                        self.password_composing = false;
+                                    }
+                                    _ => {}
+                                }
+                                input.events.push(event);
+                            }
+                        });
+                    } else {
+                        self.password_composing = false;
+                    }
                     let response = ui.add(
                         egui::TextEdit::singleline(&mut *self.password)
+                            .id(password_id)
                             .password(true)
                             .hint_text("Password"),
                     );
@@ -858,6 +894,45 @@ mod tests {
                 assert!(!app.busy);
             }
         }
+    }
+
+    #[test]
+    fn password_accepts_successive_onscreen_keyboard_commits() {
+        let ctx = egui::Context::default();
+        let mut app = Gui::new(&ctx, false);
+        app.authorize(Action::Update);
+        for _ in 0..3 {
+            let _ = ctx.run(Default::default(), |ctx| app.render(ctx));
+        }
+        for character in ["a", "b", "ç"] {
+            let _ = ctx.run(
+                egui::RawInput {
+                    events: vec![egui::Event::Ime(egui::ImeEvent::Commit(character.into()))],
+                    ..Default::default()
+                },
+                |ctx| app.render(ctx),
+            );
+        }
+        assert_eq!(app.password.as_str(), "abç");
+        // Real composition spans frames and replaces the preedit selection.
+        for event in [
+            egui::ImeEvent::Enabled,
+            egui::ImeEvent::Preedit("e".into()),
+            egui::ImeEvent::Preedit("é".into()),
+            egui::ImeEvent::Commit("é".into()),
+            egui::ImeEvent::Disabled,
+            egui::ImeEvent::Commit("z".into()),
+        ] {
+            let _ = ctx.run(
+                egui::RawInput {
+                    events: vec![egui::Event::Ime(event)],
+                    ..Default::default()
+                },
+                |ctx| app.render(ctx),
+            );
+        }
+        assert_eq!(app.password.as_str(), "abçéz");
+        assert!(!app.busy);
     }
 
     #[test]
