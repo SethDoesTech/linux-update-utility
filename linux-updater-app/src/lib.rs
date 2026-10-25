@@ -624,7 +624,7 @@ impl Gui {
             let mut credit = egui::text::LayoutJob::default();
             for text in [
                 "Created by Seth Langer",
-                "  |  RELEASE: 1.2  |  Now Built On Rust",
+                "  |  RELEASE: 1.2.1  |  Now Built On Rust",
             ] {
                 credit.append(
                     text,

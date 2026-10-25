@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(LinuxUpdaterApp VERSION 1.2 LANGUAGES NONE)
+project(LinuxUpdaterApp VERSION 1.2.1 LANGUAGES NONE)
 
 find_program(CARGO_EXECUTABLE cargo)
 if(NOT CARGO_EXECUTABLE)

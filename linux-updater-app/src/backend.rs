@@ -72,8 +72,13 @@ fn detect_with_script(script: &Path) -> Result<Vec<DetectedManager>, String> {
     Ok(String::from_utf8_lossy(&output.stdout)
         .lines()
         .filter_map(|line| {
-            let path = fs::canonicalize(line.trim()).ok()?;
-            let manager = PackageManager::from_path(&path)?;
+            // Identify the command before resolving symlinks. On DNF5 systems,
+            // /usr/bin/dnf resolves to /usr/bin/dnf5, but it is still the dnf
+            // command that the detector found. Validate and retain the resolved
+            // target so the trust checks apply to the executable that will run.
+            let detected_path = Path::new(line.trim());
+            let manager = PackageManager::from_path(detected_path)?;
+            let path = fs::canonicalize(detected_path).ok()?;
             is_trusted_executable(&path).then_some(DetectedManager { manager, path })
         })
         .collect())
@@ -179,6 +184,7 @@ pub fn run() -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::os::unix::fs::symlink;
 
     #[test]
     fn included_update_script_has_one_privilege_boundary() {
@@ -190,10 +196,34 @@ mod tests {
     #[test]
     fn detector_output_accepts_only_known_trusted_executables() {
         let managers = detect_package_managers();
-        assert!(managers.iter().all(|manager| {
-            PackageManager::from_path(&manager.path) == Some(manager.manager)
-                && is_trusted_executable(&manager.path)
-        }));
+        assert!(
+            managers
+                .iter()
+                .all(|manager| is_trusted_executable(&manager.path))
+        );
+    }
+
+    #[test]
+    fn detector_recognizes_dnf_symlinked_to_dnf5() {
+        let temp = tempfile::tempdir().unwrap();
+        let dnf5 = temp.path().join("dnf5");
+        fs::write(&dnf5, "#!/bin/sh\n").unwrap();
+        fs::set_permissions(&dnf5, fs::Permissions::from_mode(0o755)).unwrap();
+
+        let dnf = temp.path().join("dnf");
+        symlink(&dnf5, &dnf).unwrap();
+        let detector = temp.path().join("detector.sh");
+        fs::write(&detector, format!("printf '%s\\n' '{}'\n", dnf.display())).unwrap();
+
+        let managers = detect_with_script(&detector).unwrap();
+        assert_eq!(
+            managers,
+            vec![DetectedManager {
+                manager: PackageManager::Dnf,
+                path: fs::canonicalize(dnf5).unwrap(),
+            }]
+        );
+        assert!(managers[0].manager.is_privileged());
     }
 
     #[test]
