@@ -194,13 +194,47 @@ mod tests {
     }
 
     #[test]
+    fn update_modes_keep_flatpak_unprivileged_and_default_sudo_unchanged() {
+        let temp = tempfile::tempdir().unwrap();
+        for (name, script) in [
+            ("apt", "#!/bin/sh\necho apt \"$@\"\n"),
+            ("flatpak", "#!/bin/sh\necho flatpak \"$@\"\n"),
+            ("sudo", "#!/bin/sh\necho sudo \"$@\"\nwhile [ \"$1\" != -- ]; do shift; done\nshift\nexec \"$@\"\n"),
+        ] {
+            let path = temp.path().join(name);
+            fs::write(&path, script).unwrap();
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        let bash = trusted_system_program("bash").unwrap();
+        symlink(&bash, temp.path().join("bash")).unwrap();
+        let script = INCLUDED_UPDATE_SCRIPT.replace(SAFE_PATH, temp.path().to_str().unwrap());
+        for (mode, privileged, user, sudo) in [
+            ("", true, true, true),
+            ("--privileged-only", true, false, false),
+            ("--user-only", false, true, false),
+        ] {
+            let output = Command::new(&bash)
+                .args(["-c", &script, "test-update", mode])
+                .output()
+                .unwrap();
+            assert!(output.status.success());
+            let output = String::from_utf8_lossy(&output.stdout);
+            assert_eq!(output.lines().any(|line| line == "apt update"), privileged);
+            assert_eq!(
+                output.lines().any(|line| line == "apt upgrade -y"),
+                privileged
+            );
+            assert_eq!(output.lines().any(|line| line == "flatpak update -y"), user);
+            assert_eq!(output.contains("sudo -k -S -p"), sudo);
+        }
+    }
+
+    #[test]
     fn detector_output_accepts_only_known_trusted_executables() {
         let managers = detect_package_managers();
-        assert!(
-            managers
-                .iter()
-                .all(|manager| is_trusted_executable(&manager.path))
-        );
+        assert!(managers
+            .iter()
+            .all(|manager| is_trusted_executable(&manager.path)));
     }
 
     #[test]

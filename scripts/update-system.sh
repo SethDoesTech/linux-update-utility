@@ -43,7 +43,13 @@ snap refresh
 '
 fi
 
-if "$needs_privilege"; then
+if [[ "${1:-}" == "--privileged-only" ]]; then
+    # Used only after sudo has authorized this shell.
+    "$BASH" -c "$privileged_commands"
+    exit
+fi
+
+if "$needs_privilege" && [[ "${1:-}" != "--user-only" ]]; then
     sudo_path=$(command -v sudo)
     bash_path=$(command -v bash)
     "$sudo_path" -k -S -p "" -- "$bash_path" -c "$privileged_commands"

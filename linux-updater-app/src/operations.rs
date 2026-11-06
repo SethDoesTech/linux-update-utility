@@ -164,15 +164,19 @@ fn trusted_program(name: &str) -> Result<PathBuf> {
 fn command(name: &str) -> Result<Command> {
     Ok(Command::new(trusted_program(name)?))
 }
-fn sudo(script: &str) -> Result<Command> {
+fn sudo(script: &str, authenticated: bool) -> Result<Command> {
     let shell = trusted_program("bash")?;
     let mut cmd = command("sudo")?;
-    cmd.args(["-k", "-S", "-p", "", "--"])
-        .arg(shell)
-        .args(["-c", script, "luu-gui"]);
+    cmd.args(if authenticated {
+        vec!["-n", "--"]
+    } else {
+        vec!["-k", "-S", "-p", "", "--"]
+    })
+    .arg(shell)
+    .args(["-c", script, "luu-gui"]);
     Ok(cmd)
 }
-fn install(password: Zeroizing<String>, tx: &Sender<Event>) -> Result<String> {
+fn install(password: Zeroizing<String>, authenticated: bool, tx: &Sender<Event>) -> Result<String> {
     let directory = executable_directory()?;
     let embedded = directory
         .join("../share/linux-update-utility/payload/Linux_Update_Utility-x86_64.AppImage");
@@ -189,7 +193,7 @@ fn install(password: Zeroizing<String>, tx: &Sender<Event>) -> Result<String> {
     fs::copy(source, &payload).map_err(|e| format!("Cannot stage updater payload: {e}"))?;
     fs::write(&icon, include_bytes!("../luu-icon.svg")).map_err(|e| e.to_string())?;
     fs::write(&desktop, format!("[Desktop Entry]\nType=Application\nName=Linux Update Utility\nComment=Update your Linux system through a graphical interface\nExec={INSTALLED}\nIcon={ICON}\nTerminal=false\nCategories=System;Settings;\nStartupNotify=true\nStartupWMClass=linux-update-utility\n")).map_err(|e| e.to_string())?;
-    let mut cmd = sudo("set -e\ninstall -Dm755 \"$1\" \"${2}.new\"\nmv -f \"${2}.new\" \"$2\"\ninstall -Dm644 \"$3\" \"$4\"\ninstall -Dm644 \"$5\" \"$6\"\n")?;
+    let mut cmd = sudo("set -e\ninstall -Dm755 \"$1\" \"${2}.new\"\nmv -f \"${2}.new\" \"$2\"\ninstall -Dm644 \"$3\" \"$4\"\ninstall -Dm644 \"$5\" \"$6\"\n", authenticated)?;
     cmd.arg(payload)
         .arg(INSTALLED)
         .arg(icon)
@@ -220,7 +224,12 @@ fn system_info() -> Result<String> {
         .join(", ");
     Ok(format!("Distribution: {distribution}\nArchitecture: {}\nKernel: {}\nPackage Managers: {}\nUpdate Script: {}", env::consts::ARCH, kernel.trim(), if managers.is_empty() { "None detected" } else { &managers }, if script_path().exists() { "Generated" } else { "Not generated" }))
 }
-pub fn perform(action: Action, password: Zeroizing<String>, tx: Sender<Event>) {
+pub fn perform(
+    action: Action,
+    password: Zeroizing<String>,
+    authenticated: bool,
+    tx: Sender<Event>,
+) {
     let result = match action {
         Action::Generate => generate(),
         Action::PrepareUpdate => generate().and_then(|_| {
@@ -237,16 +246,30 @@ pub fn perform(action: Action, password: Zeroizing<String>, tx: Sender<Event>) {
         Action::Update => application_root().and_then(|root| {
             let mut cmd = command("bash")?;
             let script = backend::current_update_script()?;
-            cmd.args(["-c", &script]).current_dir(root);
+            if authenticated {
+                // Both sudo invocations are children of the GUI process, so
+                // sudo's normal parent-process timestamp scope is preserved.
+                let mut privileged = command("sudo")?;
+                privileged
+                    .args(["-n", "--"])
+                    .arg(trusted_program("bash")?)
+                    .args(["-c", &script, "luu-update", "--privileged-only"]);
+                stream(privileged, Zeroizing::new(String::new()), &tx)?;
+                cmd.args(["-c", &script, "luu-update", "--user-only"]);
+            } else {
+                cmd.args(["-c", &script]);
+            }
+            cmd.current_dir(root);
             stream(cmd, password, &tx).map(|_| "Update completed successfully.".into())
         }),
-        Action::Install => install(password, &tx),
-        Action::Uninstall => sudo("set -e\nrm -f -- \"$1\" \"$2\" \"$3\"\n").and_then(|mut cmd| {
-            cmd.args([INSTALLED, DESKTOP, ICON]);
-            stream(cmd, password, &tx).map(|_| {
-                "Linux Update Utility was removed. Your user-local data was preserved.".into()
-            })
-        }),
+        Action::Install => install(password, authenticated, &tx),
+        Action::Uninstall => sudo("set -e\nrm -f -- \"$1\" \"$2\" \"$3\"\n", authenticated)
+            .and_then(|mut cmd| {
+                cmd.args([INSTALLED, DESKTOP, ICON]);
+                stream(cmd, password, &tx).map(|_| {
+                    "Linux Update Utility was removed. Your user-local data was preserved.".into()
+                })
+            }),
         Action::Info => system_info(),
     };
     let _ = tx.send(Event::Done(action, result));

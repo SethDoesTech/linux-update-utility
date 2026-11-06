@@ -37,3 +37,24 @@ to `~/.local/share`). Package-manager commands remain in the included shell scri
 AppImage scripts use linuxdeploy without the Qt plugin. See `../machine-readme`
 for packaging and manual checks. Native Wayland/X11 display, accessibility, and
 on-screen keyboard behavior must be tested on release target desktops.
+
+Fingerprint authorization is attempted automatically when sudo's PAM auth stack
+(including included files) enables `pam_fprintd.so` and fprintd reports an enrolled
+finger for the current user on an attached reader. Discovery uses the optional
+system `busctl` executable; missing tools, devices, enrollment, or configuration
+leave the existing password dialog unchanged. No PAM or reader settings are changed.
+The device and enrollment checks use the [fprintd D-Bus API](https://fprint.freedesktop.org/fprintd-dev/Device.html).
+
+The password field stays focused during scanning. Typing, pasting, IME input, or
+choosing **Use password** cancels the fingerprint attempt and keeps keyboard input
+in the masked field. Cancel/closing also abandons the attempt. Failed or timed-out
+scans leave password authorization available. Password submission still follows
+the machine's PAM policy, including any fingerprint timeout that policy requires.
+
+Fingerprint validation uses sudo/PAM, never a client-side biometric success flag
+as permission to run privileged commands. Successful validation (or an existing
+sudo credential) is reused with `sudo -n` from the same parent process; systems
+that disable sudo credential caching fall back to password entry. Flatpak continues to
+run as the original user. Hardware release checks should cover enrolled and
+unenrolled readers, successful/failed scans, reader removal, typing/pasting/IME
+during a scan, Cancel, and the password-only path on a machine without a reader.

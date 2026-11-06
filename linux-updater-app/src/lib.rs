@@ -1,4 +1,5 @@
 pub mod backend;
+mod fingerprint;
 mod operations;
 
 use eframe::egui::{self, Color32};
@@ -244,6 +245,9 @@ struct Gui {
     password: Zeroizing<String>,
     focus_password: bool,
     password_composing: bool,
+    fingerprint: Option<fingerprint::Attempt>,
+    fingerprint_scanning: bool,
+    fingerprint_message: Option<&'static str>,
     confirm_uninstall: bool,
     close_after_message: bool,
 }
@@ -276,23 +280,69 @@ impl Gui {
             password: Zeroizing::new(String::new()),
             focus_password: false,
             password_composing: false,
+            fingerprint: None,
+            fingerprint_scanning: false,
+            fingerprint_message: None,
             confirm_uninstall: false,
             close_after_message: false,
         }
     }
     fn start(&mut self, action: Action) {
+        self.start_authorized(action, false);
+    }
+    fn start_authorized(&mut self, action: Action, authenticated: bool) {
         self.busy = true;
         self.output.clear();
         let password = std::mem::replace(&mut self.password, Zeroizing::new(String::new()));
         let (tx, rx) = mpsc::channel();
         self.receiver = Some(rx);
-        thread::spawn(move || operations::perform(action, password, tx));
+        thread::spawn(move || operations::perform(action, password, authenticated, tx));
     }
     fn authorize(&mut self, action: Action) {
         self.password.zeroize();
         self.password_action = Some(action);
         self.focus_password = true;
         self.password_composing = false;
+        self.fingerprint_scanning = false;
+        self.fingerprint_message = None;
+        // Unit tests inject attempts instead of contacting the host's PAM service.
+        self.fingerprint = if cfg!(test) {
+            None
+        } else {
+            Some(fingerprint::Attempt::start())
+        };
+    }
+    fn use_password(&mut self) {
+        self.fingerprint = None;
+        if self.fingerprint_scanning {
+            self.fingerprint_message = Some("Using password. Keyboard input is active.");
+        }
+        self.fingerprint_scanning = false;
+    }
+    fn poll_fingerprint(&mut self) {
+        let events: Vec<_> = self
+            .fingerprint
+            .as_ref()
+            .map(|attempt| attempt.receiver.try_iter().collect())
+            .unwrap_or_default();
+        for event in events {
+            match event {
+                fingerprint::Event::Scanning => self.fingerprint_scanning = true,
+                fingerprint::Event::Finished(success) => {
+                    self.fingerprint = None;
+                    if success {
+                        if let Some(action) = self.password_action.take() {
+                            self.password.zeroize();
+                            self.start_authorized(action, true);
+                        }
+                    } else if self.fingerprint_scanning {
+                        self.fingerprint_message =
+                            Some("Fingerprint authorization unavailable. Enter your password.");
+                    }
+                    self.fingerprint_scanning = false;
+                }
+            }
+        }
     }
     fn poll(&mut self) {
         let events: Vec<_> = self
@@ -417,6 +467,31 @@ impl Gui {
                         }
                         _ => "Enter your password to authorize system updates:",
                     });
+                    // Handle typing before polling success, including a scan that
+                    // completes in the same frame. Preserve every input event.
+                    if ui.input(|i| {
+                        i.events.iter().any(|event| {
+                            matches!(
+                                event,
+                                egui::Event::Text(_)
+                                    | egui::Event::Paste(_)
+                                    | egui::Event::Ime(egui::ImeEvent::Preedit(_))
+                                    | egui::Event::Ime(egui::ImeEvent::Commit(_))
+                            )
+                        })
+                    }) {
+                        self.use_password();
+                    }
+                    if self.fingerprint_scanning {
+                        ui.label("Touch your fingerprint reader, or start typing your password.");
+                        if ui.button("Use password").clicked() {
+                            self.use_password();
+                            self.focus_password = true;
+                        }
+                    }
+                    if let Some(message) = self.fingerprint_message {
+                        ui.label(message);
+                    }
                     let password_id = egui::Id::new("administrator_password");
                     if ui.memory(|memory| memory.has_focus(password_id)) {
                         // egui 0.31 drops commit-only IME input after the first
@@ -469,17 +544,20 @@ impl Gui {
                             && !self.password.is_empty()
                             && self.password_action.is_some()
                         {
+                            self.use_password();
                             self.password_action = None;
                             self.start(action);
                         }
                         if ui.button("Cancel").clicked()
                             || ui.input(|i| i.key_pressed(egui::Key::Escape))
                         {
+                            self.use_password();
                             self.password.zeroize();
                             self.password_action = None;
                         }
                     });
                 });
+            self.poll_fingerprint();
         }
     }
 }
@@ -624,7 +702,11 @@ impl Gui {
             let mut credit = egui::text::LayoutJob::default();
             for text in [
                 "Created by Seth Langer",
-                "  |  RELEASE: 1.2.1  |  Now Built On Rust",
+                concat!(
+                    "  |  RELEASE: ",
+                    env!("CARGO_PKG_VERSION"),
+                    "  |  Now Built On Rust"
+                ),
             ] {
                 credit.append(
                     text,
@@ -645,6 +727,9 @@ impl Gui {
 
     fn render(&mut self, ctx: &egui::Context) {
         self.poll();
+        if self.fingerprint.is_some() {
+            ctx.request_repaint_after(Duration::from_millis(50));
+        }
         if self.busy {
             ctx.request_repaint_after(Duration::from_millis(50));
             if ctx.input(|i| i.viewport().close_requested()) {
@@ -933,6 +1018,73 @@ mod tests {
         }
         assert_eq!(app.password.as_str(), "abçéz");
         assert!(!app.busy);
+    }
+
+    #[test]
+    fn keyboard_input_wins_over_fingerprint_success_without_losing_characters() {
+        for event in [
+            egui::Event::Text("a".into()),
+            egui::Event::Paste("a".into()),
+            egui::Event::Ime(egui::ImeEvent::Commit("a".into())),
+        ] {
+            let ctx = egui::Context::default();
+            let mut app = Gui::new(&ctx, false);
+            app.authorize(Action::Update);
+            for _ in 0..3 {
+                let _ = ctx.run(Default::default(), |ctx| app.render(ctx));
+            }
+            let (attempt, sender, cancelled) = fingerprint::Attempt::simulated();
+            app.fingerprint = Some(attempt);
+            app.fingerprint_scanning = true;
+            sender.send(fingerprint::Event::Finished(true)).unwrap();
+            let _ = ctx.run(
+                egui::RawInput {
+                    events: vec![event],
+                    ..Default::default()
+                },
+                |ctx| app.render(ctx),
+            );
+            assert_eq!(app.password.as_str(), "a");
+            assert!(app.password_action == Some(Action::Update));
+            assert!(!app.busy);
+            assert!(cancelled.load(std::sync::atomic::Ordering::SeqCst));
+            assert_eq!(
+                app.fingerprint_message,
+                Some("Using password. Keyboard input is active.")
+            );
+        }
+    }
+
+    #[test]
+    fn unavailable_fingerprint_preserves_password_flow_and_cancel_discards_success() {
+        let ctx = egui::Context::default();
+        let mut app = Gui::new(&ctx, false);
+        app.authorize(Action::Install);
+        let (attempt, sender, _) = fingerprint::Attempt::simulated();
+        app.fingerprint = Some(attempt);
+        sender.send(fingerprint::Event::Finished(false)).unwrap();
+        app.poll_fingerprint();
+        assert!(app.fingerprint_message.is_none());
+        assert!(app.password_action == Some(Action::Install));
+        let (attempt, sender, cancelled) = fingerprint::Attempt::simulated();
+        app.fingerprint = Some(attempt);
+        sender.send(fingerprint::Event::Finished(true)).unwrap();
+        let _ = ctx.run(
+            egui::RawInput {
+                events: vec![egui::Event::Key {
+                    key: egui::Key::Escape,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: egui::Modifiers::NONE,
+                }],
+                ..Default::default()
+            },
+            |ctx| app.render(ctx),
+        );
+        assert!(app.password_action.is_none());
+        assert!(!app.busy);
+        assert!(cancelled.load(std::sync::atomic::Ordering::SeqCst));
     }
 
     #[test]
