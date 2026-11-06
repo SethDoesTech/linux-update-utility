@@ -67,6 +67,11 @@ rust_runtime_arguments
     --icon-file "$icon_file" \
     "${RUST_RUNTIME_ARGS[@]}"
 
+# mktemp creates the AppDir with mode 700. Make the staged image accessible
+# to every user before appimagetool checks its permissions.
+chmod -R a+rX "$appdir"
+chmod a+rx "$appdir/AppRun"
+
 (
     cd "$package_directory"
     ARCH=x86_64 "$linuxdeploy" \

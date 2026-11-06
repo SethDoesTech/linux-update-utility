@@ -98,6 +98,11 @@ rust_runtime_arguments
 embedded_payload="$appdir/usr/share/linux-update-utility/payload/$payload_name"
 require_file "$embedded_payload"
 
+# mktemp creates the AppDir with mode 700. Make the staged image accessible
+# to every user before appimagetool checks its permissions.
+chmod -R a+rX "$appdir"
+chmod a+rx "$appdir/AppRun"
+
 (
     cd "$package_directory"
     ARCH=x86_64 "$linuxdeploy" \
